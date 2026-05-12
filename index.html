@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <!-- PWA / App 安装所需 Meta 标签 -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#ffffff">
+    
+    <title>专属聊天 - 旗舰增强版</title>
+    <style id="customStyles"></style>
+    <style>
+        :root {
+            --bg: #ffffff;
+            --container-bg: #ffffff;
+            --bubble-user-bg: #007aff; /* iOS 经典蓝 */
+            --bubble-user-text: #ffffff;
+            --bubble-ai-bg: #e9e9eb;   /* iOS 系统灰 */
+            --bubble-ai-text: #000000;
+            --accent: #007aff;
+            --danger: #ff3b30;
+            --radius-lg: 20px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+            background-color: var(--bg);
+            display: flex; justify-content: center;
+            height: 100vh; height: 100dvh; 
+            overflow: hidden;
+        }
+
+        .chat-container {
+            display: flex; flex-direction: column;
+            width: 100%; max-width: 600px;
+            height: 100%; 
+            background-color: var(--container-bg);
+            position: relative;
+        }
+
+        .header {
+            position: sticky; top: 0; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 16px; border-bottom: 1px solid #f2f2f2;
+            background: #fff; z-index: 100;
+        }
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .header-avatar { width: 38px; height: 38px; border-radius: 50%; background: #000; background-size: cover; background-position: center; border: 1px solid #f0f0f0; }
+        .header-info { display: flex; flex-direction: column; }
+        .header-title { font-weight: 700; font-size: 1rem; color: #000; }
+
+        .btn-action {
+            padding: 6px 12px; border-radius: 18px; border: 1px solid #eee;
+            background: #fff; font-size: 0.75rem; cursor: pointer;
+        }
+
+        .full-page {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #f9f9f9; z-index: 2000;
+            transform: translateY(100%);
+            visibility: hidden;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.3s;
+            display: flex; flex-direction: column;
+        }
+        .full-page.open { transform: translateY(0); visibility: visible; }
+
+        .page-header {
+            padding: 16px; border-bottom: 1px solid #eee; background: #fff;
+            display: flex; align-items: center; justify-content: space-between;
+            flex-shrink: 0;
+        }
+        .page-content { flex: 1; overflow-y: auto; padding: 20px; }
+        
+        .settings-group {
+            background: #fff; border-radius: 12px; padding: 15px;
+            margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .settings-label { font-size: 0.8rem; color: #8e8e93; margin-bottom: 8px; display: block; }
+        .input-box { width: 100%; padding: 12px; border: 1px solid #efefef; border-radius: 8px; background: #fdfdfd; font-size: 0.95rem; outline: none; }
+        .select-box { padding: 10px; border: 1px solid #efefef; border-radius: 8px; background: #fff; font-size: 0.9rem; outline: none; }
+
+        .preset-row { display: flex; gap: 8px; margin-top: 8px; overflow-x: auto; padding-bottom: 5px; }
+        .btn-preset { padding: 4px 10px; border-radius: 6px; border: 1px solid #eee; background: #f8f8f8; font-size: 11px; white-space: nowrap; cursor: pointer; }
+        .btn-preset.active { background: #000; color: #fff; border-color: #000; }
+
+        .cat-nav-wrapper {
+            background: #fff; border-bottom: 1px solid #eee;
+            padding: 10px 0; margin-bottom: 15px;
+            position: sticky; top: 0; z-index: 10;
+        }
+        .cat-nav {
+            display: flex; overflow-x: auto; white-space: nowrap;
+            gap: 20px; padding: 0 15px;
+            scrollbar-width: none;
+        }
+        .cat-nav::-webkit-scrollbar { display: none; }
+        .cat-tab {
+            font-size: 0.9rem; color: #8e8e93; font-weight: 500;
+            padding-bottom: 5px; position: relative; cursor: pointer;
+            transition: 0.2s;
+        }
+        .cat-tab.active { color: #000; font-weight: bold; }
+        .cat-tab.active::after {
+            content: ""; position: absolute; bottom: 0; left: 0; width: 100%;
+            height: 2px; background: #000; border-radius: 2px;
+        }
+
+        .search-bar { padding-bottom: 15px; }
+        .word-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 0; border-bottom: 1px solid #f2f2f2;
+        }
+        .word-item:last-child { border-bottom: none; }
+        .btn-del { color: var(--danger); font-size: 0.8rem; cursor: pointer; padding: 5px; }
+
+        /* 消息区域背景改为纯白 */
+        .messages-area {
+            flex: 1; overflow-y: auto; padding: 20px 14px;
+            display: flex; flex-direction: column; gap: 12px; background: #ffffff;
+            scroll-behavior: smooth;
+        }
+        .message-row { display: flex; width: 100%; align-items: flex-end; gap: 8px; }
+        .message-row.user { justify-content: flex-end; }
+        .avatar-ai { width: 34px; height: 34px; border-radius: 50%; background: #000; flex-shrink: 0; background-size: cover; background-position: center; }
+
+        .bubble-wrapper { display: flex; flex-direction: column; max-width: 75%; }
+        .message-row.user .bubble-wrapper { align-items: flex-end; }
+
+        /* iOS 风格气泡核心逻辑 */
+        .bubble {
+            padding: 8px 16px; 
+            border-radius: var(--radius-lg);
+            font-size: 14px; 
+            line-height: 1.35; 
+            word-wrap: break-word;
+            position: relative;
+        }
+        .bubble.ai { 
+            background: var(--bubble-ai-bg); 
+            color: var(--bubble-ai-text); 
+            border: none; 
+            border-bottom-left-radius: 4px; /* 模拟尾巴 */
+        }
+        .bubble.user { 
+            background: var(--bubble-user-bg); 
+            color: var(--bubble-user-text); 
+            border-bottom-right-radius: 4px; /* 模拟尾巴 */
+        }
+
+        /* 引用样式适配 */
+        .quote-content {
+            font-size: 0.8rem; background: rgba(0,0,0,0.06);
+            padding: 6px 10px; border-radius: 12px;
+            margin-bottom: 5px; opacity: 0.7; display: -webkit-box;
+            -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+            border-left: none;
+        }
+        .bubble.user .quote-content { background: rgba(255,255,255,0.2); }
+
+        .typing-bubble { 
+            display: flex; gap: 4px; padding: 12px 16px; 
+            background: var(--bubble-ai-bg); border-radius: var(--radius-lg); 
+            border-bottom-left-radius: 4px;
+        }
+        .typing-dot { 
+            width: 6px; height: 6px; border-radius: 50%; 
+            background: #999; animation: bounce 1.4s infinite ease-in-out both; 
+        }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+
+        .message-meta { display: flex; gap: 8px; font-size: 0.68rem; color: #c7c7cc; margin-top: 4px; }
+        .status-read { color: #8e8e93; font-weight: bold; }
+        .btn-reply-trigger { cursor: pointer; color: #F16588; }
+
+        .input-container {
+            flex-shrink: 0; background: #fff; border-top: 1px solid #f2f2f2;
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+        }
+        .reply-preview {
+            display: none; padding: 8px 14px; background: #f0f0f0;
+            font-size: 0.8rem; border-left: 4px solid var(--accent);
+            justify-content: space-between; align-items: center;
+        }
+        .reply-preview.show { display: flex; }
+
+        .input-area {
+            display: flex; align-items: flex-end; gap: 10px; 
+            padding: 10px 14px;
+        }
+        .input-area textarea {
+            flex: 1; border: 1px solid #e5e5ea; border-radius: 20px;
+            padding: 10px 15px; font-size: 16px; outline: none; background: #ffffff;
+            max-height: 100px; min-height: 40px; resize: none;
+        }
+        .btn-send {
+            width: 45px; height: 45px; border-radius: 50%; border: none;
+            background: #000; color: #fff; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px;
+        }
+
+        .switch-row { display: flex; justify-content: space-between; align-items: center; }
+        .switch { position: relative; width: 42px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .3s; border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 2px; bottom: 2px; background-color: white; transition: .3s; border-radius: 50%; }
+        input:checked + .slider { background-color: #34c759; }
+        input:checked + .slider:before { transform: translateX(18px); }
+
+        .ios-alert-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center;
+            z-index: 9999; opacity: 0; visibility: hidden; transition: 0.2s;
+        }
+        .ios-alert-overlay.show { opacity: 1; visibility: visible; }
+        .ios-alert-box {
+            width: 270px; background: rgba(255,255,255,0.9); backdrop-filter: blur(15px);
+            border-radius: 14px; text-align: center; overflow: hidden;
+            transform: scale(1.1); transition: 0.2s;
+        }
+        .ios-alert-overlay.show .ios-alert-box { transform: scale(1); }
+        .ios-alert-content { padding: 20px 15px; border-bottom: 1px solid #dcdcdc; }
+        .ios-alert-title { font-weight: 600; font-size: 17px; margin-bottom: 4px; }
+        .ios-alert-msg { font-size: 13px; color: #000; }
+        .ios-alert-footer { display: flex; }
+        .ios-alert-btn {
+            flex: 1; padding: 12px; border: none; background: none;
+            color: #007aff; font-size: 17px; font-weight: 600; cursor: pointer;
+        }
+        .ios-alert-btn.cancel { border-right: 1px solid #dcdcdc; font-weight: 400; color: #666; }
+        .ios-alert-btn:active { background: rgba(0,0,0,0.05); }
+
+    </style>
+</head>
+<body>
+
+    <div class="chat-container">
+        <div class="header">
+            <div class="header-left">
+                <div class="header-avatar" id="uiAvatar"></div>
+                <div class="header-info">
+                    <span class="header-title" id="uiTitle">Black</span>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button class="btn-action" id="btnOpenSettings">◆ 设置</button>
+                <button class="btn-action" id="btnOpenWordbank">★ 词库</button>
+            </div>
+        </div>
+
+        <div class="full-page" id="settingsPage">
+            <div class="page-header">
+                <span id="btnCloseSettings" style="cursor:pointer; color:#8e8e93;">取消</span>
+                <span style="font-weight:bold;">个性化设置</span>
+                <span id="btnSaveSettings" style="color:#007aff; font-weight:bold; cursor:pointer;">保存</span>
+            </div>
+            <div class="page-content">
+                
+                <span class="settings-label">气泡样式 (CSS)</span>
+                <div class="settings-group">
+                    <textarea id="cssBubble" class="input-box" rows="2" placeholder=".bubble.ai { ... }"></textarea>
+                    <div class="preset-row" id="preBubble"></div>
+                </div>
+
+                <span class="settings-label">整体主题 (CSS)</span>
+                <div class="settings-group">
+                    <textarea id="cssTheme" class="input-box" rows="2" placeholder="body { ... }"></textarea>
+                    <div class="preset-row" id="preTheme"></div>
+                </div>
+
+                <span class="settings-label">字体样式 (CSS)</span>
+                <div class="settings-group">
+                    <textarea id="cssFont" class="input-box" rows="2" placeholder="* { font-family: ... }"></textarea>
+                    <div class="preset-row" id="preFont"></div>
+                </div>
+
+                <span class="settings-label">回复提示音 (URL)</span>
+                <div class="settings-group">
+                    <input type="text" id="soundUrl" class="input-box" placeholder="http://.../*.mp3">
+                    <div class="preset-row" id="preSound"></div>
+                </div>
+
+                <span class="settings-label">角色外观</span>
+                <div class="settings-group">
+                    <div style="margin-bottom: 15px;">
+                        <label class="settings-label">昵称</label>
+                        <input type="text" id="cfgName" class="input-box">
+                    </div>
+                    <div>
+                        <label class="settings-label">头像 URL</label>
+                        <input type="text" id="cfgAvatarUrl" class="input-box">
+                    </div>
+                </div>
+
+                <span class="settings-label">交互行为</span>
+                <div class="settings-group">
+                    <div class="switch-row">
+                        <span>显示已读状态</span>
+                        <label class="switch">
+                            <input type="checkbox" id="cfgReadEnabled">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="switch-row" style="margin-top:20px;">
+                        <span>AI自动引用用户消息</span>
+                        <label class="switch">
+                            <input type="checkbox" id="cfgAiQuoteEnabled">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div style="margin-top:20px;">
+                        <label class="settings-label">回复延迟: <span id="speedVal">1.0</span>s</label>
+                        <input type="range" id="speedSlider" min="0" max="60" step="0.5" style="width:100%;">
+                    </div>
+                    <div style="margin-top:20px;">
+                        <label class="settings-label">单次最大回复量: <span id="replyMaxVal">1</span> 条</label>
+                        <input type="range" id="replyMaxSlider" min="1" max="5" step="1" style="width:100%;">
+                    </div>
+                </div>
+                
+                <div class="settings-group" style="text-align: center; display: none;" id="pwaInstallContainer">
+                    <button id="btnInstallApp" style="width:100%; padding:12px; background:#007aff; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; margin-bottom:10px;">⬇️ 安装应用到桌面</button>
+                </div>
+
+                <div class="settings-group" style="text-align: center;">
+                    <button id="btnTryClear" style="color:var(--danger); background:none; border:none; font-size:0.95rem; cursor:pointer; width:100%;">清空所有聊天记录</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="full-page" id="wordbankPage">
+            <div class="page-header">
+                <span id="btnCloseWordbank" style="cursor:pointer; color:#8e8e93;">关闭</span>
+                <span style="font-weight:bold;">回复词库</span>
+                <span style="width:30px;"></span>
+            </div>
+            
+            <div class="cat-nav-wrapper">
+                <div class="cat-nav" id="catNav"></div>
+            </div>
+
+            <div class="page-content" style="padding-top: 0;">
+                <div class="search-bar">
+                    <input type="text" id="searchWord" class="input-box" placeholder="🔍 在当前分类搜索...">
+                </div>
+                <span class="settings-label">分类管理</span>
+                <div class="settings-group" style="display:flex; gap:10px;">
+                    <input type="text" id="newCatName" class="input-box" placeholder="新分类名称...">
+                    <button id="btnAddCat" style="padding:0 15px; background:var(--accent); color:#fff; border:none; border-radius:8px;">创建</button>
+                </div>
+                <span class="settings-label">添加新回复（支持换行批量添加）</span>
+                <div class="settings-group">
+                    <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:10px;">
+                        <textarea id="newWord" class="input-box" rows="3" placeholder="每行输入一条回复内容..."></textarea>
+                        <select id="targetCat" class="select-box"></select>
+                    </div>
+                    <button id="btnAddWord" style="width:100%; padding:12px; background:#000; color:#fff; border:none; border-radius:8px;">确认并添加</button>
+                </div>
+                <div class="settings-group" id="wordList"></div>
+            </div>
+        </div>
+
+        <div class="messages-area" id="msgBox"></div>
+
+        <div class="input-container">
+            <div class="reply-preview" id="replyPreview">
+                <span id="replyText" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:10px;"></span>
+                <span id="btnCancelReply" style="cursor:pointer; font-weight:bold; padding:2px 8px;">✕</span>
+            </div>
+            <div class="input-area">
+                <textarea id="txtInput" rows="1" placeholder="发送消息..."></textarea>
+                <button class="btn-send" id="btnSend"> ✔ </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="ios-alert-overlay" id="iosAlert">
+        <div class="ios-alert-box">
+            <div class="ios-alert-content">
+                <div class="ios-alert-title" id="alertTitle">提示</div>
+                <div class="ios-alert-msg" id="alertMsg">内容</div>
+            </div>
+            <div class="ios-alert-footer" id="alertFooter">
+                <button class="ios-alert-btn" id="alertConfirm">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const msgBox = document.getElementById('msgBox');
+        const txtInput = document.getElementById('txtInput');
+        const btnSend = document.getElementById('btnSend');
+        
+        let config = JSON.parse(localStorage.getItem('chat_config_v7')) || {
+            name: "Black",
+            avatar: "",
+            readEnabled: true,
+            aiQuoteEnabled: true, // 新增：默认开启AI引用
+            delay: 1.0,
+            replyMax: 1,
+            cssBubble: "",
+            cssTheme: "",
+            cssFont: "",
+            soundUrl: ""
+        };
+        // 兼容老用户本地配置
+        if (config.aiQuoteEnabled === undefined) config.aiQuoteEnabled = true;
+
+        let presets = JSON.parse(localStorage.getItem('presets_db')) || {
+            bubble: [], theme: [], font: [], sound: []
+        };
+
+        let rawWords = JSON.parse(localStorage.getItem('words_db')) || ["嗯嗯", "原来如此", "挺好的", "哈哈"];
+        let words = rawWords.map(w => (typeof w === 'string') ? { text: w, cat: "默认" } : w);
+        let categories = JSON.parse(localStorage.getItem('categories_db')) || ["默认", "日常", "敷衍"];
+        let history = JSON.parse(localStorage.getItem('chat_logs')) || [];
+        let currentTab = "默认";
+        let quotingText = ""; // 当前引用的文本
+
+        function showIosDialog(title, msg, onConfirm = null) {
+            document.getElementById('alertTitle').innerText = title;
+            document.getElementById('alertMsg').innerText = msg;
+            const footer = document.getElementById('alertFooter');
+            footer.innerHTML = '';
+            
+            if(onConfirm) {
+                const btnCancel = document.createElement('button');
+                btnCancel.className = 'ios-alert-btn cancel';
+                btnCancel.innerText = '取消';
+                btnCancel.onclick = () => document.getElementById('iosAlert').classList.remove('show');
+                
+                const btnOk = document.createElement('button');
+                btnOk.className = 'ios-alert-btn';
+                btnOk.innerText = '确定';
+                btnOk.onclick = () => { onConfirm(); document.getElementById('iosAlert').classList.remove('show'); };
+                
+                footer.appendChild(btnCancel);
+                footer.appendChild(btnOk);
+            } else {
+                const btnOk = document.createElement('button');
+                btnOk.className = 'ios-alert-btn';
+                btnOk.innerText = '好';
+                btnOk.onclick = () => document.getElementById('iosAlert').classList.remove('show');
+                footer.appendChild(btnOk);
+            }
+            document.getElementById('iosAlert').classList.add('show');
+        }
+
+        function init() {
+            applyConfig();
+            renderHistory();
+            renderWords();
+            updateCatSelect();
+            renderCatNav();
+            renderAllPresets();
+
+            btnSend.onclick = sendMsg;
+            document.getElementById('btnOpenSettings').onclick = () => document.getElementById('settingsPage').classList.add('open');
+            document.getElementById('btnCloseSettings').onclick = () => document.getElementById('settingsPage').classList.remove('open');
+            document.getElementById('btnSaveSettings').onclick = saveSettings;
+            
+            document.getElementById('btnOpenWordbank').onclick = () => document.getElementById('wordbankPage').classList.add('open');
+            document.getElementById('btnCloseWordbank').onclick = () => document.getElementById('wordbankPage').classList.remove('open');
+            document.getElementById('btnAddWord').onclick = addWord;
+            document.getElementById('btnAddCat').onclick = addCategory;
+            document.getElementById('searchWord').oninput = renderWords;
+            document.getElementById('speedSlider').oninput = (e) => document.getElementById('speedVal').innerText = e.target.value;
+            document.getElementById('replyMaxSlider').oninput = (e) => document.getElementById('replyMaxVal').innerText = e.target.value;
+            document.getElementById('btnCancelReply').onclick = cancelReply;
+
+            document.getElementById('btnTryClear').onclick = () => {
+                showIosDialog('清空记录', '确定要删除所有聊天记录吗？此操作不可撤销。', clearChat);
+            };
+
+            txtInput.oninput = function() {
+                this.style.height = 'auto';
+                this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+            };
+        }
+
+        function renderAllPresets() {
+            renderPresetRow('bubble', 'cssBubble');
+            renderPresetRow('theme', 'cssTheme');
+            renderPresetRow('font', 'cssFont');
+            renderPresetRow('sound', 'soundUrl');
+        }
+
+        function renderPresetRow(key, targetId) {
+            const container = document.getElementById('pre' + key.charAt(0).toUpperCase() + key.slice(1));
+            container.innerHTML = `<button class="btn-preset" style="color:#007aff" onclick="triggerSavePreset('${key}','${targetId}')">+ 存预设</button>`;
+            presets[key].forEach((p, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'btn-preset';
+                btn.innerText = p.name;
+                btn.onclick = () => {
+                    document.getElementById(targetId).value = p.val;
+                    showIosDialog('加载预设', `已填入预设: ${p.name}`);
+                };
+                btn.oncontextmenu = (e) => {
+                    e.preventDefault();
+                    showIosDialog('删除预设', `确定删除 [${p.name}] 吗？`, () => {
+                        presets[key].splice(idx, 1);
+                        savePresets();
+                        renderAllPresets();
+                    });
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        function triggerSavePreset(key, targetId) {
+            const val = document.getElementById(targetId).value.trim();
+            if(!val) return showIosDialog('提示', '请先填写内容再保存为预设');
+            const name = prompt('为该预设命名:', '预设' + (presets[key].length + 1));
+            if(name) {
+                presets[key].push({name, val});
+                savePresets();
+                renderAllPresets();
+                showIosDialog('完成', '预设已保存');
+            }
+        }
+
+        function savePresets() { localStorage.setItem('presets_db', JSON.stringify(presets)); }
+
+        function renderCatNav() {
+            const nav = document.getElementById('catNav');
+            nav.innerHTML = categories.map(cat => `
+                <div class="cat-tab ${cat === currentTab ? 'active' : ''}" onclick="switchTab('${cat}')">
+                    ${cat}
+                </div>
+            `).join('');
+        }
+
+        window.switchTab = (cat) => { currentTab = cat; renderCatNav(); renderWords(); }
+
+        function updateCatSelect() {
+            const sel = document.getElementById('targetCat');
+            if(sel) sel.innerHTML = categories.map(c => `<option value="${c}">${c}</option>`).join('');
+        }
+
+        function addCategory() {
+            const name = document.getElementById('newCatName').value.trim();
+            if(!name) return;
+            if(categories.includes(name)) return showIosDialog('提示', '分类已存在');
+            categories.push(name);
+            document.getElementById('newCatName').value = '';
+            saveData(); updateCatSelect(); renderCatNav(); renderWords();
+        }
+
+        function saveSettings() {
+            config.name = document.getElementById('cfgName').value.trim() || "Black";
+            config.avatar = document.getElementById('cfgAvatarUrl').value.trim();
+            config.readEnabled = document.getElementById('cfgReadEnabled').checked;
+            config.aiQuoteEnabled = document.getElementById('cfgAiQuoteEnabled').checked;
+            config.delay = parseFloat(document.getElementById('speedSlider').value);
+            config.replyMax = parseInt(document.getElementById('replyMaxSlider').value);
+            config.cssBubble = document.getElementById('cssBubble').value;
+            config.cssTheme = document.getElementById('cssTheme').value;
+            config.cssFont = document.getElementById('cssFont').value;
+            config.soundUrl = document.getElementById('soundUrl').value;
+            
+            localStorage.setItem('chat_config_v7', JSON.stringify(config));
+            applyConfig();
+            document.getElementById('settingsPage').classList.remove('open');
+            msgBox.innerHTML = ''; renderHistory();
+        }
+
+        function applyConfig() {
+            document.getElementById('uiTitle').innerText = config.name;
+            document.getElementById('cfgName').value = config.name;
+            document.getElementById('cfgAvatarUrl').value = config.avatar;
+            document.getElementById('cfgReadEnabled').checked = config.readEnabled;
+            document.getElementById('cfgAiQuoteEnabled').checked = config.aiQuoteEnabled;
+            document.getElementById('speedSlider').value = config.delay;
+            document.getElementById('speedVal').innerText = config.delay;
+            document.getElementById('replyMaxSlider').value = config.replyMax || 1;
+            document.getElementById('replyMaxVal').innerText = config.replyMax || 1;
+            
+            document.getElementById('cssBubble').value = config.cssBubble || "";
+            document.getElementById('cssTheme').value = config.cssTheme || "";
+            document.getElementById('cssFont').value = config.cssFont || "";
+            document.getElementById('soundUrl').value = config.soundUrl || "";
+            
+            document.getElementById('customStyles').innerHTML = `
+                ${config.cssTheme}
+                ${config.cssBubble}
+                ${config.cssFont}
+            `;
+
+            const av = document.getElementById('uiAvatar');
+            config.avatar ? av.style.backgroundImage = `url(${config.avatar})` : av.style.background = '#000';
+        }
+
+        function setReply(text) {
+            quotingText = text;
+            document.getElementById('replyText').innerText = "回复: " + text;
+            document.getElementById('replyPreview').classList.add('show');
+            txtInput.focus();
+        }
+
+        function cancelReply() {
+            quotingText = "";
+            document.getElementById('replyPreview').classList.remove('show');
+        }
+
+        async function sendMsg() {
+            const val = txtInput.value.trim();
+            if(!val) return;
+
+            const uMsg = { 
+                role: 'user', 
+                text: val, 
+                time: curTime(), 
+                read: false, 
+                quote: quotingText 
+            };
+            history.push(uMsg);
+            renderMsg(uMsg);
+            txtInput.value = '';
+            txtInput.style.height = 'auto';
+            cancelReply();
+
+            if(config.readEnabled) {
+                await new Promise(r => setTimeout(r, 800));
+                markRead();
+            }
+            
+            const count = Math.floor(Math.random() * (config.replyMax || 1)) + 1;
+            
+            for(let i=0; i<count; i++) {
+                const typing = showTyping();
+                const realDelay = (config.delay * 1000) + (Math.random() * 500);
+                await new Promise(r => setTimeout(r, realDelay));
+                typing.remove();
+
+                if(config.soundUrl) {
+                    const audio = new Audio(config.soundUrl);
+                    audio.play().catch(e => console.log('音源播放失败'));
+                }
+
+                const currentWords = words.length > 0 ? words : [{text: "嗯嗯", cat: "默认"}];
+                
+                // 修改后的逻辑：开启开关且随机数命中（这里设为 50% 概率）时才引用
+const quoteProbability = 0.5; // 触发概率，0.5 为 50%，1.0 为 100%
+const isHit = Math.random() < quoteProbability;
+const shouldQuote = (i === 0 && config.aiQuoteEnabled && isHit) ? val : "";
+
+                const aiMsg = { 
+                    role: 'ai', 
+                    text: currentWords[Math.floor(Math.random()*currentWords.length)].text, 
+                    time: curTime(),
+                    quote: shouldQuote 
+                };
+                history.push(aiMsg);
+                renderMsg(aiMsg);
+                saveData();
+                
+                if(i < count - 1) await new Promise(r => setTimeout(r, 400));
+            }
+        }
+
+        function renderMsg(m) {
+            const row = document.createElement('div');
+            row.className = `message-row ${m.role}`;
+            const isUser = m.role === 'user';
+            const aiAvatar = !isUser && config.avatar ? `style="background-image:url(${config.avatar})"` : '';
+            
+            const quoteHtml = m.quote ? `<div class="quote-content">${m.quote}</div>` : '';
+            
+            row.innerHTML = `
+                ${!isUser ? `<div class="avatar-ai" ${aiAvatar}></div>` : ''}
+                <div class="bubble-wrapper">
+                    <div class="bubble ${m.role}">
+                        ${quoteHtml}
+                        <div class="text-body">${m.text}</div>
+                    </div>
+                    <div class="message-meta">
+                        <span>${m.time}</span>
+                        ${isUser ? `<span class="status-tag ${m.read?'status-read':''}">${m.read?'已读':'未读'}</span>` : ''}
+                        <span class="btn-reply-trigger" onclick="setReply('${m.text.replace(/'/g, "\\'")}')">引用</span>
+                    </div>
+                </div>`;
+            msgBox.appendChild(row);
+            msgBox.scrollTop = msgBox.scrollHeight;
+        }
+
+        function showTyping() {
+            const div = document.createElement('div');
+            div.className = 'message-row ai';
+            const aiAvatar = config.avatar ? `style="background-image:url(${config.avatar})"` : '';
+            div.innerHTML = `
+                <div class="avatar-ai" ${aiAvatar}></div>
+                <div class="bubble-wrapper">
+                    <div style="font-size: 0.75rem; color: #999; margin-bottom: 4px; margin-left: 2px;">对方输入中...</div>
+                    <div class="typing-bubble">
+                        <div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>
+                    </div>
+                </div>`;
+            msgBox.appendChild(div);
+            msgBox.scrollTop = msgBox.scrollHeight;
+            return div;
+        }
+
+        function markRead() {
+            history.forEach(h => { if(h.role==='user') h.read = true; });
+            document.querySelectorAll('.status-tag').forEach(el => { el.innerText='已读'; el.classList.add('status-read'); });
+            saveData();
+        }
+
+        function renderWords() {
+            const list = document.getElementById('wordList');
+            const keyword = document.getElementById('searchWord').value.toLowerCase();
+            list.innerHTML = '';
+            const filteredWords = words.filter(w => w.cat === currentTab && w.text.toLowerCase().includes(keyword));
+
+            if(filteredWords.length === 0) {
+                list.innerHTML = '<div style="text-align:center; color:#ccc; padding:20px;">暂无词条</div>';
+            }
+
+            filteredWords.forEach((w) => {
+                const item = document.createElement('div');
+                item.className = "word-item";
+                const realIndex = words.findIndex(gw => gw.text === w.text && gw.cat === w.cat);
+                item.innerHTML = `<span>${w.text}</span><span class="btn-del" onclick="delWord(${realIndex})">删除</span>`;
+                list.appendChild(item);
+            });
+        }
+
+        function addWord() {
+            const inp = document.getElementById('newWord');
+            const rawText = inp.value.trim();
+            const cat = document.getElementById('targetCat').value;
+            if(!rawText) return;
+
+            const lines = rawText.split('\n').map(l => l.trim()).filter(l => l !== "");
+            let addedCount = 0;
+            let skipCount = 0;
+            let lastSkipped = "";
+
+            lines.forEach(line => {
+                const isDuplicate = words.some(w => w.text === line && w.cat === cat);
+                if (isDuplicate) {
+                    skipCount++;
+                    lastSkipped = line;
+                } else {
+                    words.push({ text: line, cat: cat });
+                    addedCount++;
+                }
+            });
+
+            if (skipCount > 0 && addedCount === 0) {
+                showIosDialog('添加失败', `此分类下已存在该词条: \n"${lastSkipped}"`);
+            } else if (skipCount > 0) {
+                showIosDialog('批量提醒', `成功添加 ${addedCount} 条，跳过 ${skipCount} 条同分类重复内容。`);
+            }
+            
+            inp.value = ''; 
+            saveData(); 
+            renderWords(); 
+        }
+
+        window.delWord = (i) => { words.splice(i, 1); saveData(); renderWords(); };
+
+        function clearChat() { 
+            history=[]; saveData(); msgBox.innerHTML=''; 
+            document.getElementById('settingsPage').classList.remove('open'); 
+        }
+
+        function saveData() { 
+            localStorage.setItem('words_db', JSON.stringify(words)); 
+            localStorage.setItem('categories_db', JSON.stringify(categories));
+            localStorage.setItem('chat_logs', JSON.stringify(history)); 
+        }
+
+        function renderHistory() { history.forEach(renderMsg); }
+        function curTime() { return new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+
+        init();
+
+        // ====== PWA / 免外部文件 App 安装框架 ======
+        (function initPWA() {
+            // 1. 动态生成 manifest.json 数据，使浏览器识别为 Web App
+            const manifestData = {
+                name: "专属聊天 - 旗舰增强版",
+                short_name: "专属聊天",
+                start_url: location.href,
+                display: "standalone",
+                background_color: "#ffffff",
+                theme_color: "#ffffff",
+                icons: [{
+                    // 使用内置的简易气泡图标 Base64 作为 App 图标
+                    src: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzAwN2FmZiI+PHBhdGggZD0iTTIwIDJIMGMyIDEuMSAzIDIgMyAzLjVWMjJjMCAxLjEgLjkgMiAyIDJoMTRjMS4xIDAgMi0uOSAyLTJWMTRsNC00VjRjMC0xLjEtLjktMi0yLTJ6Ii8+PC9zdmc+",
+                    sizes: "192x192 512x512",
+                    type: "image/svg+xml",
+                    purpose: "any maskable"
+                }]
+            };
+            const manifestBlob = new Blob([JSON.stringify(manifestData)], { type: 'application/json' });
+            const manifestLink = document.createElement('link');
+            manifestLink.rel = 'manifest';
+            manifestLink.href = URL.createObjectURL(manifestBlob);
+            document.head.appendChild(manifestLink);
+
+            // 2. 注入伪 Service Worker（满足 Chrome/Edge PWA 核心检查条件）
+            if ('serviceWorker' in navigator) {
+                const swCode = `
+                    self.addEventListener('install', e => e.waitUntil(self.skipWaiting()));
+                    self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+                    self.addEventListener('fetch', e => {}); 
+                `;
+                const swBlob = new Blob([swCode], { type: 'application/javascript' });
+                navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(() => {
+                    console.log("提示: 由于浏览器对本地 Blob 跨域政策的安全限制，ServiceWorker注册可能被拦截。但这通常不影响在菜单中手动选择'添加到主屏幕'。");
+                });
+            }
+
+            // 3. 监听浏览器的可安装事件
+            let deferredPrompt;
+            const installContainer = document.getElementById('pwaInstallContainer');
+            const installBtn = document.getElementById('btnInstallApp');
+
+            window.addEventListener('beforeinstallprompt', (e) => {
+                // 阻止 Chrome 的默认安装提示弹窗
+                e.preventDefault();
+                deferredPrompt = e;
+                // 显示我们自定义的安装按钮
+                if(installContainer) installContainer.style.display = 'block';
+            });
+
+            // 按钮点击处理
+            if(installBtn) {
+                installBtn.addEventListener('click', () => {
+                    if (deferredPrompt) {
+                        // 唤起原生系统安装弹窗
+                        deferredPrompt.prompt();
+                        deferredPrompt.userChoice.then((choiceResult) => {
+                            if (choiceResult.outcome === 'accepted') {
+                                console.log('已同意安装');
+                            }
+                            deferredPrompt = null;
+                            installContainer.style.display = 'none';
+                        });
+                    } else {
+                        // 在 iOS Safari 或已经安装的情况下给予提示
+                        showIosDialog('安装提示', '如果未弹出安装确认框，请点击浏览器底栏或右上角菜单，选择“添加到主屏幕”即可安装为独立 App。');
+                    }
+                });
+            }
+        })();
+    </script>
+</body>
+</html>
